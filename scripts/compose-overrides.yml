@@ -1,0 +1,63 @@
+# =============================================================================
+# LoyalMindApp — KoboToolbox override layer (SOURCE, not run directly).
+#
+# This file is NOT read by `docker compose` at runtime. It's the hand-
+# maintained input to scripts/kobo_compile_compose.py, which merges it with
+# kobo-docker's frontend + backend compose files (via reliable explicit `-f`
+# flags) and writes the fully-resolved result to `docker-compose.yml` at the
+# project root - THAT file is what `docker compose up` actually reads.
+#
+# Why compile instead of merging at runtime: this stack's compose files use a
+# YAML anchor merge (`<<: *django`) across several services, and Compose's
+# env-var-driven multi-file merge (COMPOSE_FILE) intermittently drops the
+# merged image for one of them, a different one each time. Pre-resolving once
+# with explicit `-f` flags (reliable in testing) and writing a single static
+# file sidesteps the bug entirely - `docker compose up` then has no merging
+# left to do.
+#
+# scripts/kobo-start.sh recompiles automatically before every start. Edit
+# THIS file for compose-level changes (platform pins, ports, network fixes) -
+# never hand-edit the generated docker-compose.yml, it gets overwritten.
+#
+# kobo-install normally runs backend/frontend as two SEPARATE projects
+# (`kobobe`/`kobofe`). Compiling all 4 kobo-docker files plus this one under a
+# single COMPOSE_PROJECT_NAME (set in .env) folds them into ONE project, so
+# one `up -d` / `down` / `ps` controls the whole thing at once.
+#
+# This file's job is purely to patch the merged result:
+#   - un-externalize `kobo-be-network` now that backend+frontend share a
+#     single project (no need for kobo-install's separate-project trick)
+#   - pin a handful of amd64-only images so they run under emulation on
+#     Apple Silicon. Delete the `platform:` lines when running on the
+#     x86_64 Ubuntu server, where native images exist and no emulation
+#     is needed.
+# =============================================================================
+
+services:
+  postgres:
+    platform: linux/amd64
+    # Published to the host so a DB client (psql, TablePlus, pgAdmin, ...) can
+    # connect directly. kobo-install leaves backend ports unexposed by
+    # default; remove this block if you'd rather keep Postgres reachable only
+    # from inside the Docker network.
+    ports:
+      - "${POSTGRES_PORT}:5432"
+  kpi:
+    platform: linux/amd64
+  worker:
+    platform: linux/amd64
+  worker_kobocat:
+    platform: linux/amd64
+  worker_low_priority:
+    platform: linux/amd64
+  worker_long_running_tasks:
+    platform: linux/amd64
+  beat:
+    platform: linux/amd64
+  enketo_express:
+    platform: linux/amd64
+
+networks:
+  kobo-be-network:
+    external: false
+    name: ${COMPOSE_PROJECT_NAME}_kobo-be-network

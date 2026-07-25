@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Applies .env (only if KOBO_SETUP_REQUIRED=true), then starts the whole
-# KoboToolbox stack as a single `docker compose` project.
+# Bootstraps kobo-install if this is a fresh checkout, applies .env, then
+# starts the whole KoboToolbox stack as a single `docker compose` project.
+#
+# This is the ONE command a brand new machine (e.g. the Ubuntu server) needs
+# after `git clone` + filling in `.env` - kobo-install and kobo-docker are
+# both gitignored (upstream/generated, not project source) and get cloned
+# here automatically if missing.
 #
 # Usage: ./scripts/kobo-start.sh
 set -euo pipefail
@@ -10,10 +15,21 @@ cd "$PROJECT_ROOT"
 
 if [ ! -f .env ]; then
   echo "ERROR: .env not found at $PROJECT_ROOT/.env" >&2
+  echo "Copy .env.example to .env and fill in real values first." >&2
   exit 1
 fi
 
-echo "==> Checking .env against kobo-install config..."
+if [ ! -d kobo-install ]; then
+  echo "==> kobo-install/ not found - cloning it (first run on this machine)..."
+  git clone https://github.com/kobotoolbox/kobo-install kobo-install
+fi
+
+if ! python3 -c "import netifaces" >/dev/null 2>&1; then
+  echo "==> Installing kobo-install's netifaces dependency..."
+  pip3 install --user netifaces
+fi
+
+echo "==> Applying .env (config + docker-compose.yml)..."
 python3 scripts/kobo_apply_env.py
 
 echo ""

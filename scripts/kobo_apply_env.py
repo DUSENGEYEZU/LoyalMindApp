@@ -1,16 +1,35 @@
 #!/usr/bin/env python3
 """
-Sync ../.env into kobo-install/.run.conf and re-render kobo-env/, then reset
-the KOBO_SETUP_REQUIRED flag back to false.
+Sync ../.env into kobo-install/.run.conf, re-render kobo-env/, then compile
+the whole stack into a single ../docker-compose.yml - EVERY time this runs,
+unconditionally. `.env` is the single source of truth: whatever is in it
+right now gets applied, no flag to flip.
 
-This is the ONLY place `.env` values get applied to the actual KoboToolbox
-config. It is a no-op (prints and exits 0) when KOBO_SETUP_REQUIRED=false.
+On a brand new machine (fresh clone of this repo, e.g. the Ubuntu server),
+kobo-install/.run.conf won't exist yet - this script detects that and builds
+a full config from kobo-install's own defaults + this .env. kobo-install
+itself must already be cloned at kobo-install/ - ./scripts/kobo-start.sh
+takes care of that before calling this script.
+
+The compile step (last part of main()) merges kobo-docker's frontend/backend
+compose files with scripts/compose-overrides.yml (this project's platform
+pins/network/port patches) via explicit `-f` flags, and writes the fully-
+resolved, single-file result to docker-compose.yml at the project root. That
+file is what `docker compose up` actually reads - after running this script
+once, plain `docker compose up`/`down`/`ps`/`logs` all just work, no flags,
+no wrapper. (Explicit `-f` flags here, not Compose's COMPOSE_FILE env var -
+COMPOSE_FILE intermittently drops the merged `image` field for one of
+kobo-docker's YAML-anchored services; resolving the merge once and writing a
+static file sidesteps that entirely.)
+
+Idempotent: re-running with unchanged .env values is a fast no-op write
+(reports "No values differ..."), so it's safe/cheap to call before every
+`docker compose up`.
 
 Run via ./scripts/kobo-start.sh - not usually invoked directly.
 """
-import json
 import os
-import re
+import subprocess
 import sys
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -78,90 +97,113 @@ def coerce(value, type_):
     return value
 
 
-def set_env_var(path, key, new_value):
-    with open(path, encoding="utf-8") as f:
-        lines = f.readlines()
-    pattern = re.compile(rf"^{re.escape(key)}=")
-    replaced = False
-    for i, line in enumerate(lines):
-        if pattern.match(line):
-            lines[i] = f"{key}={new_value}\n"
-            replaced = True
-            break
-    if not replaced:
-        lines.append(f"{key}={new_value}\n")
-    with open(path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
+def apply_mapping(run_conf, env):
+    """Overlay .env values onto a run.conf dict (in place). Returns list of changes."""
+    changed = []
+
+    def set_key(conf_key, new_value):
+        if run_conf.get(conf_key) != new_value:
+            changed.append((conf_key, run_conf.get(conf_key), new_value))
+        run_conf[conf_key] = new_value
+
+    for env_key, (conf_key, type_) in MAPPING.items():
+        if env_key in env:
+            set_key(conf_key, coerce(env[env_key], type_))
+
+    install_type = env.get("KOBO_INSTALL_TYPE", "workstation").strip().lower()
+    set_key("local_installation", install_type == "workstation")
+
+    nginx_port = env.get("KOBO_NGINX_PORT")
+    if nginx_port:
+        set_key("exposed_nginx_docker_port", nginx_port)
+        set_key("nginx_proxy_port", nginx_port)
+
+    interface_ip = env.get("KOBO_LOCAL_INTERFACE_IP")
+    if interface_ip:
+        set_key("local_interface_ip", interface_ip)
+        set_key("primary_backend_ip", interface_ip)
+
+    kobodocker_path = env.get("KOBO_KOBODOCKER_PATH")
+    if kobodocker_path:
+        # Resolve relative to PROJECT_ROOT (where .env lives), not
+        # KOBO_INSTALL_DIR - kobo-docker is a sibling of kobo-install, not
+        # nested inside it.
+        set_key(
+            "kobodocker_path",
+            os.path.realpath(os.path.join(PROJECT_ROOT, kobodocker_path)),
+        )
+
+    return changed
+
+
+def compile_compose():
+    """Merge kobo-docker's compose files + our overrides into one static,
+    fully-resolved docker-compose.yml at the project root, via explicit -f
+    flags (reliable) rather than Compose's COMPOSE_FILE env var (flaky for
+    this stack's YAML-anchored services)."""
+    out_path = os.path.join(PROJECT_ROOT, "docker-compose.yml")
+    header = (
+        "# ==============================================================================\n"
+        "# GENERATED FILE - do not edit by hand.\n"
+        "# Compiled by scripts/kobo_apply_env.py from:\n"
+        "#   kobo-docker/docker-compose.backend.yml\n"
+        "#   kobo-docker/docker-compose.backend.override.yml\n"
+        "#   kobo-docker/docker-compose.frontend.yml\n"
+        "#   kobo-docker/docker-compose.frontend.override.yml\n"
+        "#   scripts/compose-overrides.yml  (this project's source of truth for overrides)\n"
+        "# Edit scripts/compose-overrides.yml, then re-run ./scripts/kobo-start.sh.\n"
+        "# ==============================================================================\n"
+    )
+    result = subprocess.run(
+        [
+            "docker", "compose",
+            "--env-file", ENV_PATH,
+            "-f", os.path.join(PROJECT_ROOT, "kobo-docker/docker-compose.backend.yml"),
+            "-f", os.path.join(PROJECT_ROOT, "kobo-docker/docker-compose.backend.override.yml"),
+            "-f", os.path.join(PROJECT_ROOT, "kobo-docker/docker-compose.frontend.yml"),
+            "-f", os.path.join(PROJECT_ROOT, "kobo-docker/docker-compose.frontend.override.yml"),
+            "-f", os.path.join(PROJECT_ROOT, "scripts/compose-overrides.yml"),
+            "config",
+        ],
+        capture_output=True, text=True, cwd=PROJECT_ROOT,
+    )
+    if result.returncode != 0:
+        print(f"ERROR compiling docker-compose.yml:\n{result.stderr}", file=sys.stderr)
+        sys.exit(1)
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(header)
+        f.write(result.stdout)
+    print(f"Compiled {out_path}")
+
+
+def print_changes(changed):
+    print(f"Applied {len(changed)} change(s) to .run.conf:")
+    for conf_key, old, new in changed:
+        is_secret = any(s in conf_key for s in ("password", "secret", "key"))
+        old_display = "***" if is_secret else old
+        new_display = "***" if is_secret else new
+        print(f"  - {conf_key}: {old_display!r} -> {new_display!r}")
 
 
 def main():
+    if not os.path.isdir(KOBO_INSTALL_DIR):
+        print(
+            f"ERROR: {KOBO_INSTALL_DIR} does not exist. "
+            "./scripts/kobo-start.sh clones it automatically - run this "
+            "script through that, not directly, on a fresh machine.",
+            file=sys.stderr,
+        )
+        return 1
+
     env = load_dotenv(ENV_PATH)
     if not env:
         print(f"No .env found at {ENV_PATH} - nothing to do.")
         return 0
 
-    setup_required = env.get("KOBO_SETUP_REQUIRED", "false").strip().lower() in (
-        "1", "true", "yes", "on"
-    )
-    if not setup_required:
-        print("KOBO_SETUP_REQUIRED=false - using existing kobo-install config as-is.")
-        return 0
+    fresh_machine = not os.path.isfile(RUN_CONF_PATH)
 
-    if not os.path.isfile(RUN_CONF_PATH):
-        print(
-            f"ERROR: {RUN_CONF_PATH} does not exist yet. Run the interactive "
-            "kobo-install setup once first (see kobo-install/readme.md), THEN "
-            "use this .env-driven flow for subsequent changes.",
-            file=sys.stderr,
-        )
-        return 1
-
-    with open(RUN_CONF_PATH, encoding="utf-8") as f:
-        run_conf = json.load(f)
-
-    changed = []
-    for env_key, (conf_key, type_) in MAPPING.items():
-        if env_key not in env:
-            continue
-        new_value = coerce(env[env_key], type_)
-        if run_conf.get(conf_key) != new_value:
-            changed.append((conf_key, run_conf.get(conf_key), new_value))
-        run_conf[conf_key] = new_value
-
-    install_type = env.get("KOBO_INSTALL_TYPE", "workstation").strip().lower()
-    local_installation = install_type == "workstation"
-    if run_conf.get("local_installation") != local_installation:
-        changed.append(("local_installation", run_conf.get("local_installation"), local_installation))
-    run_conf["local_installation"] = local_installation
-
-    nginx_port = env.get("KOBO_NGINX_PORT")
-    if nginx_port:
-        for key in ("exposed_nginx_docker_port", "nginx_proxy_port"):
-            if run_conf.get(key) != nginx_port:
-                changed.append((key, run_conf.get(key), nginx_port))
-            run_conf[key] = nginx_port
-
-    interface_ip = env.get("KOBO_LOCAL_INTERFACE_IP")
-    if interface_ip:
-        for key in ("local_interface_ip", "primary_backend_ip"):
-            if run_conf.get(key) != interface_ip:
-                changed.append((key, run_conf.get(key), interface_ip))
-            run_conf[key] = interface_ip
-
-    with open(RUN_CONF_PATH, "w", encoding="utf-8") as f:
-        json.dump(run_conf, f, indent=2, sort_keys=True)
-
-    if not changed:
-        print("KOBO_SETUP_REQUIRED=true but no values differ from current .run.conf.")
-    else:
-        print(f"Applied {len(changed)} change(s) to .run.conf:")
-        for conf_key, old, new in changed:
-            old_display = "***" if "password" in conf_key or "secret" in conf_key or "key" in conf_key else old
-            new_display = "***" if "password" in conf_key or "secret" in conf_key or "key" in conf_key else new
-            print(f"  - {conf_key}: {old_display!r} -> {new_display!r}")
-
-    # Re-render kobo-env/ from the updated .run.conf using kobo-install's own
-    # Template engine (safer than reimplementing its Jinja logic here).
+    # Import kobo-install's own Config/Setup/Template - reused rather than
+    # reimplemented so we stay byte-compatible with whatever it expects.
     sys.path.insert(0, KOBO_INSTALL_DIR)
     cwd = os.getcwd()
     os.chdir(KOBO_INSTALL_DIR)
@@ -171,22 +213,41 @@ def main():
         from helpers.template import Template
 
         config = Config()
+        if fresh_machine:
+            print("No kobo-install/.run.conf yet - building fresh config from "
+                  "kobo-install's defaults + .env ...")
+            run_conf = config.get_upgraded_dict()  # template merged with {} (nothing read yet)
+        else:
+            run_conf = config.get_dict()
+
+        changed = apply_mapping(run_conf, env)
+        config.set_config(run_conf)
+        config.write_config()  # sets date_created/date_modified correctly, like kobo-install itself does
+
+        if not changed:
+            print("No values differ from current .run.conf.")
+        else:
+            print_changes(changed)
+
+        # Clones kobo-docker if missing, then renders kobo-env/ from the
+        # config we just wrote.
         Setup.clone_kobodocker(config)
         Template.render(config, force=True)
     finally:
         os.chdir(cwd)
 
+    local_installation = run_conf.get("local_installation")
     hosts_sensitive_keys = {"public_domain_name", "kpi_subdomain", "kc_subdomain", "ee_subdomain", "local_interface_ip"}
-    if local_installation and any(k in hosts_sensitive_keys for k, _, _ in changed):
+    if local_installation and (fresh_machine or any(k in hosts_sensitive_keys for k, _, _ in changed)):
         print(
-            "\nNOTE: domain/subdomain/IP changed and this is a Workstation "
-            "install - you may need to update /etc/hosts. Re-run kobo-install's "
-            "own setup (`python3 run.py --setup`) once to trigger that, or edit "
-            "/etc/hosts by hand."
+            "\nNOTE: this is a Workstation install with a domain/IP that may "
+            "not be in /etc/hosts yet. If the app doesn't resolve, add the "
+            "domain/subdomains to /etc/hosts (see kobo-install's own "
+            "`python3 run.py --setup` for the automated version of this step, "
+            "which needs sudo)."
         )
 
-    set_env_var(ENV_PATH, "KOBO_SETUP_REQUIRED", "false")
-    print("\nKOBO_SETUP_REQUIRED reset to false in .env.")
+    compile_compose()
     return 0
 
 
