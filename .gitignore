@@ -1,0 +1,10 @@
+# Local KoboToolbox development stack (Docker infra, not app code).
+# These contain secrets (.run.conf, kobo-env/*) and large third-party repos
+# that must never be pushed to this project's GitHub remote.
+/kobo-install/
+/kobo-docker/
+/kobo-env/
+
+# Secrets - single source of truth for Kobo config, never commit.
+# Commit .env.example (blanked) instead.
+.env
