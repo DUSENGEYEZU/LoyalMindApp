@@ -53,33 +53,21 @@ services:
       context: ../branding/kpi
       dockerfile: Dockerfile
     image: loyalminds/kpi:2.026.27b-branded
-    # Harmless locally (this header is only ever present when a real proxy
-    # sets it): tells Django to trust X-Forwarded-Proto for is_secure()/CSRF/
-    # absolute-URL generation, needed once something in front of kobo-docker's
-    # own nginx (e.g. scripts/compose-overrides.letsencrypt.yml's
-    # nginx_ssl_proxy) is the one actually terminating TLS.
-    environment:
-      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+    # NOTE: SECURE_PROXY_SSL_HEADER is NOT set here - see
+    # scripts/compose-overrides.letsencrypt.yml for why it must only be set
+    # when a real TLS-terminating proxy is actually in front of this stack
+    # (production), never here (this file is always merged, local dev
+    # included).
   worker:
     platform: linux/amd64
-    environment:
-      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   worker_kobocat:
     platform: linux/amd64
-    environment:
-      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   worker_low_priority:
     platform: linux/amd64
-    environment:
-      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   worker_long_running_tasks:
     platform: linux/amd64
-    environment:
-      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   beat:
     platform: linux/amd64
-    environment:
-      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   enketo_express:
     platform: linux/amd64
   mongo:

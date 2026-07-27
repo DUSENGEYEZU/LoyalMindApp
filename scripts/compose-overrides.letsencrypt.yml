@@ -37,6 +37,36 @@ services:
     # reset. `!reset` is Compose's tag for "clear this value, don't merge".
     ports: !reset []
 
+  # SECURE_PROXY_SSL_HEADER tells Django to trust X-Forwarded-Proto for
+  # is_secure()/CSRF/absolute-URL generation - needed here because nginx_ssl_
+  # proxy (below), not kobo-docker's own nginx, is what actually terminates
+  # TLS. This MUST live only in this file, never in the always-merged
+  # scripts/compose-overrides.yml: kobo's own settings.py does
+  # `if SECURE_PROXY_SSL_HEADER: SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
+  # = True` the moment the env var is merely *set* - regardless of whether a
+  # request actually carries that header. Local dev is plain HTTP with no
+  # proxy in front, so Secure cookies there mean the browser refuses to
+  # store them at all, breaking login with a silent redirect back to the
+  # login page (this was a real bug caught during local pre-launch testing).
+  kpi:
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+  worker:
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+  worker_kobocat:
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+  worker_low_priority:
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+  worker_long_running_tasks:
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+  beat:
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+
   nginx_ssl_proxy:
     image: nginx:1.27-alpine
     restart: unless-stopped
