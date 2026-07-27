@@ -211,6 +211,12 @@ def _letsencrypt_domains(env):
         env.get("KOBO_EE_SUBDOMAIN", "ee"),
     ]
     domains = [f"{sub}.{domain}" for sub in subs]
+    # Bare apex domain too, so https://{domain} (not just https://kf.{domain})
+    # is covered by the certificate - see render_nginx_ssl_proxy_conf() for
+    # how it's proxied to the same KPI frontend. Appended, not prepended:
+    # domains[0] (the primary/cert-directory name) must stay kf.{domain} for
+    # back-compat with certs issued before this was added.
+    domains.append(domain)
     # These get interpolated into shell/container commands and nginx config
     # below (cert_exists, cert_is_staging, certbot -d, app.conf), so reject
     # anything that isn't a plain hostname up front rather than letting a
@@ -227,11 +233,20 @@ def render_nginx_ssl_proxy_conf(env, bootstrap):
     """Render nginx-ssl-proxy/conf/app.conf from the bootstrap or final
     template. Never hand-edit the output - it's overwritten every run."""
     domains, primary_domain = _letsencrypt_domains(env)
+    apex_domain = env["KOBO_PUBLIC_DOMAIN_NAME"]
+    kf_domain = f'{env.get("KOBO_KPI_SUBDOMAIN", "kf")}.{apex_domain}'
+    # Everything except kf.<domain> - kf redirects to the apex domain (see
+    # final.conf.tpl), so it gets its own dedicated server block instead.
+    proxy_server_names = [d for d in domains if d != kf_domain]
+
     template_name = "bootstrap.conf.tpl" if bootstrap else "final.conf.tpl"
     with open(os.path.join(LETSENCRYPT_TEMPLATES_DIR, template_name), encoding="utf-8") as f:
         content = f.read()
     content = content.replace("{{SERVER_NAMES}}", " ".join(domains))
     content = content.replace("{{PRIMARY_DOMAIN}}", primary_domain)
+    content = content.replace("{{APEX_DOMAIN}}", apex_domain)
+    content = content.replace("{{KF_DOMAIN}}", kf_domain)
+    content = content.replace("{{PROXY_SERVER_NAMES}}", " ".join(proxy_server_names))
 
     conf_dir = os.path.join(NGINX_SSL_PROXY_DIR, "conf")
     os.makedirs(conf_dir, exist_ok=True)
@@ -272,6 +287,26 @@ def cert_is_staging(primary_domain):
     return "STAGING" in result.stdout
 
 
+def cert_domains(primary_domain):
+    """DNS SANs on the on-disk certificate for primary_domain (empty set if
+    it can't be read). cert_exists() only checks presence, not which names
+    the cert actually covers - without this, adding a new domain to .env
+    (e.g. the bare apex domain) would hit the idempotent early-return path
+    below and never actually get added to the certificate."""
+    result = subprocess.run(
+        ["docker", "compose", "run", "--rm", "--entrypoint", "openssl", "certbot",
+         "x509", "-in", f"/etc/letsencrypt/live/{primary_domain}/fullchain.pem",
+         "-noout", "-ext", "subjectAltName"],
+        cwd=PROJECT_ROOT, capture_output=True, text=True,
+    )
+    names = set()
+    for part in result.stdout.replace("\n", ",").split(","):
+        part = part.strip()
+        if part.startswith("DNS:"):
+            names.add(part[len("DNS:"):])
+    return names
+
+
 def ensure_letsencrypt(env):
     """Idempotent: does nothing once a real certificate already exists (the
     long-running `certbot` service in compose-overrides.letsencrypt.yml
@@ -309,8 +344,12 @@ def ensure_letsencrypt(env):
     # cert_is_staging()'s docstring for why the plain `existing` check
     # alone isn't enough.
     stale_ca = existing and cert_is_staging(primary_domain) != want_staging
+    # Likewise for a domain .env now asks for (e.g. the apex domain added
+    # after the cert was first issued) that the on-disk cert doesn't cover.
+    missing_domains = set(domains) - cert_domains(primary_domain) if existing else set()
+    needs_reissue = stale_ca or bool(missing_domains)
 
-    if existing and not stale_ca:
+    if existing and not needs_reissue:
         # Already issued with the right CA; just make sure the final (not
         # bootstrap) conf is in place, in case app.conf was somehow missing
         # or stale. Rewriting the file alone isn't enough - nginx doesn't
@@ -329,16 +368,20 @@ def ensure_letsencrypt(env):
 
     run = lambda args: subprocess.run(args, cwd=PROJECT_ROOT, check=True)
 
-    if stale_ca:
+    if needs_reissue:
         # nginx_ssl_proxy is already up and already serving the final conf
         # (which includes the port-80 ACME-challenge location), so the
         # bootstrap dance isn't needed here - just re-request the cert.
-        print(
-            f"\nExisting certificate for {primary_domain} was issued by "
-            f"the {'staging' if not want_staging else 'production'} CA but "
-            f"KOBO_LETSENCRYPT_STAGING={'true' if want_staging else 'false'} "
-            "now - reissuing..."
-        )
+        reasons = []
+        if stale_ca:
+            reasons.append(
+                f"issued by the {'staging' if not want_staging else 'production'} CA but "
+                f"KOBO_LETSENCRYPT_STAGING={'true' if want_staging else 'false'} now"
+            )
+        if missing_domains:
+            reasons.append(f"missing domain(s) {', '.join(sorted(missing_domains))}")
+        print(f"\nExisting certificate for {primary_domain} needs reissuing "
+              f"({'; '.join(reasons)})...")
     else:
         print(f"\nNo certificate yet for {primary_domain} - running Let's Encrypt bootstrap...")
         render_nginx_ssl_proxy_conf(env, bootstrap=True)
@@ -364,11 +407,14 @@ def ensure_letsencrypt(env):
     ]
     if want_staging:
         certbot_args.append("--staging")
-    if stale_ca:
-        # Otherwise certbot sees a still-valid cert for the same domains and
-        # silently no-ops ("Certificate not yet due for renewal"), which
-        # would defeat the whole point of this branch.
-        certbot_args.append("--force-renewal")
+    if needs_reissue:
+        # --force-renewal: otherwise certbot sees a still-valid cert for the
+        # same domains and silently no-ops ("not yet due for renewal") -
+        # needed for the stale_ca case. --expand: required non-interactively
+        # whenever the requested domain set is a superset of what the
+        # existing cert lineage covers (the missing_domains case) - without
+        # it certbot errors asking to confirm with --expand or --duplicate.
+        certbot_args += ["--force-renewal", "--expand"]
     for d in domains:
         certbot_args += ["-d", d]
 
