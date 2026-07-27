@@ -75,7 +75,10 @@ jobs:
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s' "$PROD_SSH_KEY" | sed 's/\\n/\n/g' > ~/.ssh/deploy_key
+          # printf '%s\n' (not '%s') - OpenSSH refuses to parse a private key
+          # file that's missing its final trailing newline, and the shell's
+          # $PROD_SSH_KEY expansion above already stripped it.
+          printf '%s\n' "$PROD_SSH_KEY" | sed 's/\\n/\n/g' > ~/.ssh/deploy_key
           sed -i.bak 's/\r$//; /^$/d' ~/.ssh/deploy_key && rm -f ~/.ssh/deploy_key.bak
           chmod 600 ~/.ssh/deploy_key
           if ! grep -q "BEGIN" ~/.ssh/deploy_key; then
