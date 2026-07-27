@@ -1,0 +1,149 @@
+name: Deploy - Production (loyalminds.org)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: loyal-prod-${{ github.workflow }}-${{ github.ref }}
+  # Queue overlapping prod runs; do not cancel a deploy mid-flight.
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install OpenConnect
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openconnect vpnc-scripts ipcalc
+
+      - name: Connect to VPN
+        env:
+          VPN_SERVER: ${{ secrets.VPN_SERVER }}
+          GROUP: ${{ secrets.VPN_GROUP }}
+          USER: ${{ secrets.VPN_USERNAME }}
+          PASS: ${{ secrets.VPN_PASSWORD }}
+        run: |
+          set -e
+
+          if [ -z "$VPN_SERVER" ] || [ -z "$GROUP" ] || [ -z "$USER" ] || [ -z "$PASS" ]; then
+            echo "Error: VPN secrets not configured"
+            exit 1
+          fi
+
+          PIN=$( (echo "" | sudo openconnect "https://$VPN_SERVER" --user="$USER" --authgroup="$GROUP" 2>&1) \
+            | grep -oE 'pin-sha256:[A-Za-z0-9+/=]+' | head -n 1 )
+
+          if [ -z "$PIN" ]; then
+            echo "Error: Could not detect server certificate pin"
+            exit 1
+          fi
+
+          echo "$PASS" | sudo openconnect "https://$VPN_SERVER" \
+            --user="$USER" \
+            --authgroup="$GROUP" \
+            --passwd-on-stdin \
+            --servercert "$PIN" \
+            --quiet \
+            --background \
+            --pid-file=/tmp/openconnect.pid \
+            --script=/usr/share/vpnc-scripts/vpnc-script \
+            > /dev/null 2>&1
+
+          sleep 3
+
+          if ! ip addr show | grep -q tun0; then
+            echo "Error: VPN connection failed"
+            exit 1
+          fi
+
+      - name: Setup SSH key
+        env:
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$PROD_SSH_KEY" | sed 's/\\n/\n/g' > ~/.ssh/deploy_key
+          sed -i.bak 's/\r$//; /^$/d' ~/.ssh/deploy_key && rm -f ~/.ssh/deploy_key.bak
+          chmod 600 ~/.ssh/deploy_key
+          if ! grep -q "BEGIN" ~/.ssh/deploy_key; then
+            echo "Error: SSH key format is invalid"
+            exit 1
+          fi
+          ssh-keyscan "$PROD_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Package tracked files
+        run: |
+          # Only git-tracked files - never touches gitignored server-side
+          # state (kobo-install/, kobo-docker/, kobo-env/, docker-compose.yml,
+          # nginx-ssl-proxy/) since those simply aren't in this list. That's
+          # what makes redeploys safe: generated config, cloned upstream
+          # repos, and Let's Encrypt certs on the server are never clobbered.
+          git ls-files > /tmp/filelist.txt
+          tar -czf /tmp/deploy.tar.gz -T /tmp/filelist.txt
+
+      - name: Write production .env
+        env:
+          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+        run: |
+          printf '%s\n' "$PROD_ENV_FILE" > /tmp/prod.env
+
+      - name: Copy files to server
+        env:
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "$PROD_SSH_USER@$PROD_SSH_HOST" \
+            "mkdir -p ~/loyalmind-app-prod"
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            /tmp/deploy.tar.gz /tmp/prod.env \
+            "$PROD_SSH_USER@$PROD_SSH_HOST:~/loyalmind-app-prod/"
+
+      - name: Deploy to production server
+        env:
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "$PROD_SSH_USER@$PROD_SSH_HOST" \
+            "bash -s" << 'DEPLOY_EOF'
+            set -e
+            cd ~/loyalmind-app-prod || { echo "Error: could not access ~/loyalmind-app-prod"; exit 1; }
+
+            tar -xzf deploy.tar.gz
+            rm -f deploy.tar.gz
+            mv prod.env .env
+            chmod +x scripts/*.sh
+
+            # This server is x86_64 - native images exist, no emulation
+            # pins needed (those are Apple Silicon-only, see that file's
+            # header comment). Local Mac dev's tracked copy is untouched;
+            # this only edits the copy that just landed on the server.
+            sed -i '/platform: linux\/amd64/d' scripts/compose-overrides.yml
+
+            ./scripts/kobo-start.sh
+          DEPLOY_EOF
+
+      - name: Disconnect VPN
+        if: always()
+        run: |
+          if [ -f /tmp/openconnect.pid ]; then
+            sudo kill $(cat /tmp/openconnect.pid) 2>/dev/null || true
+            sleep 1
+            sudo kill -9 $(cat /tmp/openconnect.pid) 2>/dev/null || true
+            sudo rm -f /tmp/openconnect.pid
+          fi
+          sudo killall openconnect 2>/dev/null || true

@@ -44,18 +44,51 @@ services:
       - "${POSTGRES_PORT}:5432"
   kpi:
     platform: linux/amd64
+    # Branded image: same upstream kpi build, patched with a scoped text
+    # substitution (exact-case "KoboToolbox" -> "LoyalMinds") - see
+    # branding/kpi/Dockerfile for exactly what it touches and why. Only kpi
+    # needs this (it's the service that copies frontend static files into
+    # nginx's shared volume on startup); workers/beat don't serve the UI.
+    build:
+      context: ../branding/kpi
+      dockerfile: Dockerfile
+    image: loyalminds/kpi:2.026.27b-branded
+    # Harmless locally (this header is only ever present when a real proxy
+    # sets it): tells Django to trust X-Forwarded-Proto for is_secure()/CSRF/
+    # absolute-URL generation, needed once something in front of kobo-docker's
+    # own nginx (e.g. scripts/compose-overrides.letsencrypt.yml's
+    # nginx_ssl_proxy) is the one actually terminating TLS.
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   worker:
     platform: linux/amd64
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   worker_kobocat:
     platform: linux/amd64
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   worker_low_priority:
     platform: linux/amd64
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   worker_long_running_tasks:
     platform: linux/amd64
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   beat:
     platform: linux/amd64
+    environment:
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
   enketo_express:
     platform: linux/amd64
+  mongo:
+    # kobo-docker pins the floating `mongo:8.0` tag, which currently
+    # resolves to a build affected by a known MongoDB/kernel incompatibility
+    # (TCMalloc violates the kernel's rseq ABI on Linux 6.19+ - MongoDB
+    # SERVER-121912, fixed in later 8.0.x patches). Pin an explicit patch
+    # release that's confirmed to start cleanly instead of floating on `8.0`.
+    image: mongo:8.0.15
 
 networks:
   kobo-be-network:

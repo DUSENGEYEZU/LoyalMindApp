@@ -1,0 +1,62 @@
+# =============================================================================
+# LoyalMindApp - Let's Encrypt / HTTPS overlay (SOURCE, not run directly).
+#
+# Only merged in by scripts/kobo_apply_env.py when KOBO_USE_LETSENCRYPT=true
+# in .env - local Mac dev never sees this file, so kobo-docker's own nginx
+# keeps its normal host port 80 exactly as before.
+#
+# When enabled, this file:
+#   - clears kobo-docker's own `nginx` service's host port publish (its
+#     compose source hardcodes `80:80` regardless of proxy settings - this
+#     override replaces that list, doesn't append to it, so it's the only
+#     way to free up host port 80 for the TLS-terminating proxy below)
+#   - adds `nginx_ssl_proxy`: owns host 80+443, terminates TLS, and reverse-
+#     proxies everything to kobo-docker's own `nginx` service internally on
+#     the shared kobo-fe-network (reachable by service name, no host port
+#     needed for that hop)
+#   - adds `certbot`: renews the certificate every 12h in a loop
+#
+# kobo-install's own built-in Let's Encrypt support (the `use_letsencrypt`
+# config flag + kobotoolbox/nginx-certbot repo) is NOT used here - it assumes
+# the old two-project (kobofe/kobobe) layout and hardcodes a network name
+# (`kobofe_kobo-fe-network`) that doesn't exist in this project's merged
+# single-project setup. This file is a from-scratch equivalent, scoped to
+# our actual network/service names.
+#
+# The one-time dummy-cert -> real-cert bootstrap dance, and rendering
+# nginx-ssl-proxy/conf/app.conf itself, are handled by
+# scripts/kobo_apply_env.py's ensure_letsencrypt() - never hand-edit
+# nginx-ssl-proxy/conf/app.conf, it's generated and gets overwritten.
+# =============================================================================
+
+services:
+  nginx:
+    # Plain `ports: []` is a no-op on current Compose - an empty sequence
+    # merges (concatenates) with the inherited non-empty one instead of
+    # replacing it, so the original `80:80` survives unless explicitly
+    # reset. `!reset` is Compose's tag for "clear this value, don't merge".
+    ports: !reset []
+
+  nginx_ssl_proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    volumes:
+      - ../nginx-ssl-proxy/conf:/etc/nginx/conf.d
+      - ../nginx-ssl-proxy/data/certbot/conf:/etc/letsencrypt
+      - ../nginx-ssl-proxy/data/certbot/www:/var/www/certbot
+    ports:
+      - "80:80"
+      - "443:443"
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    networks:
+      kobo-fe-network: {}
+
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    volumes:
+      - ../nginx-ssl-proxy/data/certbot/conf:/etc/letsencrypt
+      - ../nginx-ssl-proxy/data/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"

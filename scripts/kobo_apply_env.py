@@ -29,13 +29,18 @@ Idempotent: re-running with unchanged .env values is a fast no-op write
 Run via ./scripts/kobo-start.sh - not usually invoked directly.
 """
 import os
+import re
+import shutil
 import subprocess
 import sys
+import time
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
 KOBO_INSTALL_DIR = os.path.join(PROJECT_ROOT, "kobo-install")
 RUN_CONF_PATH = os.path.join(KOBO_INSTALL_DIR, ".run.conf")
+LETSENCRYPT_TEMPLATES_DIR = os.path.join(PROJECT_ROOT, "scripts/letsencrypt-templates")
+NGINX_SSL_PROXY_DIR = os.path.join(PROJECT_ROOT, "nginx-ssl-proxy")
 
 # ENV_VAR -> (run.conf key, type) — type is one of: str, bool, int
 MAPPING = {
@@ -113,6 +118,17 @@ def apply_mapping(run_conf, env):
     install_type = env.get("KOBO_INSTALL_TYPE", "workstation").strip().lower()
     set_key("local_installation", install_type == "workstation")
 
+    # Always force kobo-install's OWN `use_letsencrypt` flag off - it's a
+    # different, same-named-by-coincidence setting from our KOBO_USE_
+    # LETSENCRYPT env var. kobo-install defaults it to True for any fresh
+    # server-type install, which makes its nginx template comment out the
+    # `ports: 80:80` line entirely (deferring to ITS OWN nginx-certbot
+    # proxy, which we never stand up - we have a separate, from-scratch
+    # equivalent, see compose-overrides.letsencrypt.yml). Left at its
+    # default, kobo-docker's nginx ends up with no port published at all
+    # and nothing else fills the gap.
+    set_key("use_letsencrypt", False)
+
     nginx_port = env.get("KOBO_NGINX_PORT")
     if nginx_port:
         set_key("exposed_nginx_docker_port", nginx_port)
@@ -136,37 +152,45 @@ def apply_mapping(run_conf, env):
     return changed
 
 
-def compile_compose():
+def is_true(env, key):
+    return env.get(key, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def compile_compose(env):
     """Merge kobo-docker's compose files + our overrides into one static,
     fully-resolved docker-compose.yml at the project root, via explicit -f
     flags (reliable) rather than Compose's COMPOSE_FILE env var (flaky for
-    this stack's YAML-anchored services)."""
+    this stack's YAML-anchored services).
+
+    scripts/compose-overrides.letsencrypt.yml is only appended when
+    KOBO_USE_LETSENCRYPT=true - local dev never sees it, so kobo-docker's own
+    nginx keeps its normal host port 80 exactly as before."""
     out_path = os.path.join(PROJECT_ROOT, "docker-compose.yml")
+    files = [
+        "kobo-docker/docker-compose.backend.yml",
+        "kobo-docker/docker-compose.backend.override.yml",
+        "kobo-docker/docker-compose.frontend.yml",
+        "kobo-docker/docker-compose.frontend.override.yml",
+        "scripts/compose-overrides.yml",
+    ]
+    if is_true(env, "KOBO_USE_LETSENCRYPT"):
+        files.append("scripts/compose-overrides.letsencrypt.yml")
+
     header = (
         "# ==============================================================================\n"
         "# GENERATED FILE - do not edit by hand.\n"
         "# Compiled by scripts/kobo_apply_env.py from:\n"
-        "#   kobo-docker/docker-compose.backend.yml\n"
-        "#   kobo-docker/docker-compose.backend.override.yml\n"
-        "#   kobo-docker/docker-compose.frontend.yml\n"
-        "#   kobo-docker/docker-compose.frontend.override.yml\n"
-        "#   scripts/compose-overrides.yml  (this project's source of truth for overrides)\n"
-        "# Edit scripts/compose-overrides.yml, then re-run ./scripts/kobo-start.sh.\n"
+        + "".join(f"#   {f}\n" for f in files)
+        + "# Edit scripts/compose-overrides.yml (or .letsencrypt.yml), then re-run\n"
+        "# ./scripts/kobo-start.sh.\n"
         "# ==============================================================================\n"
     )
-    result = subprocess.run(
-        [
-            "docker", "compose",
-            "--env-file", ENV_PATH,
-            "-f", os.path.join(PROJECT_ROOT, "kobo-docker/docker-compose.backend.yml"),
-            "-f", os.path.join(PROJECT_ROOT, "kobo-docker/docker-compose.backend.override.yml"),
-            "-f", os.path.join(PROJECT_ROOT, "kobo-docker/docker-compose.frontend.yml"),
-            "-f", os.path.join(PROJECT_ROOT, "kobo-docker/docker-compose.frontend.override.yml"),
-            "-f", os.path.join(PROJECT_ROOT, "scripts/compose-overrides.yml"),
-            "config",
-        ],
-        capture_output=True, text=True, cwd=PROJECT_ROOT,
-    )
+    args = ["docker", "compose", "--env-file", ENV_PATH]
+    for f in files:
+        args += ["-f", os.path.join(PROJECT_ROOT, f)]
+    args.append("config")
+
+    result = subprocess.run(args, capture_output=True, text=True, cwd=PROJECT_ROOT)
     if result.returncode != 0:
         print(f"ERROR compiling docker-compose.yml:\n{result.stderr}", file=sys.stderr)
         sys.exit(1)
@@ -174,6 +198,196 @@ def compile_compose():
         f.write(header)
         f.write(result.stdout)
     print(f"Compiled {out_path}")
+
+
+_HOSTNAME_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$")
+
+
+def _letsencrypt_domains(env):
+    domain = env["KOBO_PUBLIC_DOMAIN_NAME"]
+    subs = [
+        env.get("KOBO_KPI_SUBDOMAIN", "kf"),
+        env.get("KOBO_KC_SUBDOMAIN", "kc"),
+        env.get("KOBO_EE_SUBDOMAIN", "ee"),
+    ]
+    domains = [f"{sub}.{domain}" for sub in subs]
+    # These get interpolated into shell/container commands and nginx config
+    # below (cert_exists, cert_is_staging, certbot -d, app.conf), so reject
+    # anything that isn't a plain hostname up front rather than letting a
+    # malformed .env value reach any of those.
+    for d in domains:
+        if not _HOSTNAME_RE.match(d):
+            print(f"ERROR: {d!r} is not a valid hostname (check KOBO_PUBLIC_DOMAIN_NAME "
+                  "and the subdomain vars in .env).", file=sys.stderr)
+            sys.exit(1)
+    return domains, domains[0]  # (all domains, primary/first domain)
+
+
+def render_nginx_ssl_proxy_conf(env, bootstrap):
+    """Render nginx-ssl-proxy/conf/app.conf from the bootstrap or final
+    template. Never hand-edit the output - it's overwritten every run."""
+    domains, primary_domain = _letsencrypt_domains(env)
+    template_name = "bootstrap.conf.tpl" if bootstrap else "final.conf.tpl"
+    with open(os.path.join(LETSENCRYPT_TEMPLATES_DIR, template_name), encoding="utf-8") as f:
+        content = f.read()
+    content = content.replace("{{SERVER_NAMES}}", " ".join(domains))
+    content = content.replace("{{PRIMARY_DOMAIN}}", primary_domain)
+
+    conf_dir = os.path.join(NGINX_SSL_PROXY_DIR, "conf")
+    os.makedirs(conf_dir, exist_ok=True)
+    with open(os.path.join(conf_dir, "app.conf"), "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"Rendered nginx-ssl-proxy/conf/app.conf ({'bootstrap' if bootstrap else 'final'})")
+
+
+def cert_exists(primary_domain):
+    """Check certificate existence via a container, not the host
+    filesystem - certbot locks `live/`/`archive/` down to 0700 root-only
+    (correctly, to protect the private key), which the non-root deploy
+    user can't stat directly. os.path.isfile() would just silently return
+    False there every time, making every future deploy think no cert
+    exists and re-request one - risking Let's Encrypt's rate limits."""
+    result = subprocess.run(
+        ["docker", "compose", "run", "--rm", "--entrypoint", "test", "certbot",
+         "-f", f"/etc/letsencrypt/live/{primary_domain}/fullchain.pem"],
+        cwd=PROJECT_ROOT, capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def cert_is_staging(primary_domain):
+    """True if the on-disk certificate was issued by Let's Encrypt's
+    staging CA. cert_exists() only checks presence, not which CA issued
+    it - without this, flipping KOBO_LETSENCRYPT_STAGING from true to
+    false would hit the idempotent early-return path below and silently
+    keep serving the old untrusted staging cert forever, since certbot's
+    own `certonly` is a no-op when a cert already exists and isn't near
+    expiry."""
+    result = subprocess.run(
+        ["docker", "compose", "run", "--rm", "--entrypoint", "openssl", "certbot",
+         "x509", "-in", f"/etc/letsencrypt/live/{primary_domain}/fullchain.pem",
+         "-noout", "-issuer"],
+        cwd=PROJECT_ROOT, capture_output=True, text=True,
+    )
+    return "STAGING" in result.stdout
+
+
+def ensure_letsencrypt(env):
+    """Idempotent: does nothing once a real certificate already exists (the
+    long-running `certbot` service in compose-overrides.letsencrypt.yml
+    handles renewal from then on). Only the first-ever run does the
+    dummy-cert -> real-cert bootstrap dance, so this is safe to call on
+    every ./scripts/kobo-start.sh without re-requesting certificates or
+    hitting Let's Encrypt's rate limits."""
+    if not is_true(env, "KOBO_USE_LETSENCRYPT"):
+        return
+
+    email = env.get("KOBO_LETSENCRYPT_EMAIL", "").strip()
+    if not email:
+        print(
+            "ERROR: KOBO_USE_LETSENCRYPT=true but KOBO_LETSENCRYPT_EMAIL is "
+            "not set in .env.", file=sys.stderr,
+        )
+        sys.exit(1)
+
+    domains, primary_domain = _letsencrypt_domains(env)
+    certbot_conf_dir = os.path.join(NGINX_SSL_PROXY_DIR, "data/certbot/conf")
+    certbot_www_dir = os.path.join(NGINX_SSL_PROXY_DIR, "data/certbot/www")
+    os.makedirs(certbot_conf_dir, exist_ok=True)
+    os.makedirs(certbot_www_dir, exist_ok=True)
+
+    for fname in ("options-ssl-nginx.conf", "ssl-dhparams.pem"):
+        dest = os.path.join(certbot_conf_dir, fname)
+        if not os.path.isfile(dest):
+            shutil.copyfile(os.path.join(LETSENCRYPT_TEMPLATES_DIR, fname), dest)
+
+    want_staging = is_true(env, "KOBO_LETSENCRYPT_STAGING")
+    existing = cert_exists(primary_domain)
+    # A cert whose CA doesn't match what .env now asks for (typically:
+    # staging cert left over from initial bootstrap, KOBO_LETSENCRYPT_
+    # STAGING flipped to false since) needs a forced reissue - see
+    # cert_is_staging()'s docstring for why the plain `existing` check
+    # alone isn't enough.
+    stale_ca = existing and cert_is_staging(primary_domain) != want_staging
+
+    if existing and not stale_ca:
+        # Already issued with the right CA; just make sure the final (not
+        # bootstrap) conf is in place, in case app.conf was somehow missing
+        # or stale. Rewriting the file alone isn't enough - nginx doesn't
+        # notice bind-mounted config changes on its own, so an already-
+        # running nginx_ssl_proxy would otherwise keep serving whatever
+        # config (e.g. bootstrap-only, no port 443 block) it last loaded at
+        # startup. `up -d` is a no-op if already running with this same
+        # image/spec; the reload is what actually picks up the new file.
+        render_nginx_ssl_proxy_conf(env, bootstrap=False)
+        subprocess.run(["docker", "compose", "up", "-d"], cwd=PROJECT_ROOT, check=True)
+        subprocess.run(
+            ["docker", "compose", "exec", "-T", "nginx_ssl_proxy", "nginx", "-s", "reload"],
+            cwd=PROJECT_ROOT,
+        )
+        return
+
+    run = lambda args: subprocess.run(args, cwd=PROJECT_ROOT, check=True)
+
+    if stale_ca:
+        # nginx_ssl_proxy is already up and already serving the final conf
+        # (which includes the port-80 ACME-challenge location), so the
+        # bootstrap dance isn't needed here - just re-request the cert.
+        print(
+            f"\nExisting certificate for {primary_domain} was issued by "
+            f"the {'staging' if not want_staging else 'production'} CA but "
+            f"KOBO_LETSENCRYPT_STAGING={'true' if want_staging else 'false'} "
+            "now - reissuing..."
+        )
+    else:
+        print(f"\nNo certificate yet for {primary_domain} - running Let's Encrypt bootstrap...")
+        render_nginx_ssl_proxy_conf(env, bootstrap=True)
+
+        # Full `up -d`, not just `up -d nginx_ssl_proxy` - kobo-docker's own
+        # `nginx` service also needs recreating here, since this is what
+        # actually applies its `ports: []` override (releasing host port 80) so
+        # nginx_ssl_proxy can bind it instead. Compose won't recreate a service
+        # just because a *different*, explicitly-named service was targeted.
+        run(["docker", "compose", "up", "-d"])
+        time.sleep(3)  # give nginx a moment to start listening on 80
+
+    certbot_args = [
+        # --entrypoint overrides the service's default entrypoint (a renewal
+        # loop that ignores its arguments) so this one-shot `certonly` call
+        # actually runs instead of silently starting the loop again.
+        "docker", "compose", "run", "--rm", "--entrypoint", "certbot",
+        "certbot", "certonly",
+        "--webroot", "-w", "/var/www/certbot",
+        "--rsa-key-size", "4096",
+        "--email", email,
+        "--agree-tos", "--non-interactive",
+    ]
+    if want_staging:
+        certbot_args.append("--staging")
+    if stale_ca:
+        # Otherwise certbot sees a still-valid cert for the same domains and
+        # silently no-ops ("Certificate not yet due for renewal"), which
+        # would defeat the whole point of this branch.
+        certbot_args.append("--force-renewal")
+    for d in domains:
+        certbot_args += ["-d", d]
+
+    result = subprocess.run(certbot_args, cwd=PROJECT_ROOT)
+    if result.returncode != 0 or not cert_exists(primary_domain):
+        print(
+            "ERROR: certbot did not issue a certificate. Common causes: DNS "
+            f"for {', '.join(domains)} doesn't point at this server yet, or "
+            "ports 80/443 aren't reachable from the public internet. "
+            "nginx_ssl_proxy is left running in bootstrap mode so you can "
+            "retry once that's fixed (just re-run this script).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(f"Certificate issued for {primary_domain}. Switching to the final config...")
+    render_nginx_ssl_proxy_conf(env, bootstrap=False)
+    run(["docker", "compose", "exec", "-T", "nginx_ssl_proxy", "nginx", "-s", "reload"])
+    print("HTTPS is live.")
 
 
 def print_changes(changed):
@@ -229,6 +443,18 @@ def main():
         else:
             print_changes(changed)
 
+        # kobo-install's own wizard normally creates kobodocker_path and
+        # writes its `.uniqid` file *before* ever calling clone_kobodocker
+        # (which unconditionally tries to move that file out of the way,
+        # clone, then move it back). We bypass that wizard, so replicate
+        # just those two steps here - otherwise clone_kobodocker crashes
+        # with FileNotFoundError on a truly fresh machine (only surfaces
+        # when kobo-docker/ doesn't already exist, e.g. a brand new server;
+        # local dev never hit this because kobo-docker/ was already present
+        # from earlier testing).
+        os.makedirs(run_conf["kobodocker_path"], exist_ok=True)
+        config.write_unique_id()
+
         # Clones kobo-docker if missing, then renders kobo-env/ from the
         # config we just wrote.
         Setup.clone_kobodocker(config)
@@ -247,7 +473,8 @@ def main():
             "which needs sudo)."
         )
 
-    compile_compose()
+    compile_compose(env)
+    ensure_letsencrypt(env)
     return 0
 
 

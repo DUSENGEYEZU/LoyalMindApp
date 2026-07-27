@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LoyalMinds wordmark: replaces the upstream KoboToolbox logo. The icon
+     group below is reused unchanged from the original file (a generic
+     checkbox/checkmark glyph, not brand-specific text); only the lettering
+     is new, as real <text> instead of hand-traced letter outlines. -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 434.4 56.9" style="enable-background:new 0 0 434.4 56.9;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#FFFFFF;}
+	.st1{fill:#64C0FF;}
+	.wordmark{font-family:Arial, Helvetica, sans-serif;font-weight:700;}
+</style>
+<g>
+	<g>
+		<path class="st1" d="M31.5,38v5.1c0,3-2.4,5.1-5.1,5.1H15.3c-3,0-5.1-2.4-5.1-5.1V14.3c0-3,2.4-5.1,5.1-5.1h11.1
+			c3,0,5.1,2.4,5.1,5.1v0.6c0.9-0.3,2.1-0.6,3-0.6c1.2,0,2.4,0.3,3.6,0.6V14c0-6.6-5.4-12-12-12H15C8.4,2,3,7.4,3,14v28.8
+			c0,6.6,5.4,12,12,12h11.1c6.6,0,12-5.4,12-12V29.9L31.5,38z"/>
+		<path class="st1" d="M26.1,36.2l12-13.8c0.3-0.3,0.3-1.2,0-1.5l0,0c-2.1-1.8-5.4-1.5-7.2,0.6l-7.5,8.7c-0.3,0.3-0.6,0.3-0.6,0
+			l-2.7-3.3c-0.6-0.6-1.5-0.6-2.1,0l0,0c-1.8,1.8-1.8,4.8-0.3,6.9l2.4,2.7C21.3,38.3,24.3,38.3,26.1,36.2z"/>
+	</g>
+	<text x="60" y="47" class="wordmark" font-size="42"><tspan class="st0">Loyal</tspan><tspan class="st1">Minds</tspan></text>
+</g>
+</svg>
