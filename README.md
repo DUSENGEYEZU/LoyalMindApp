@@ -135,5 +135,7 @@ See **[docs/DATABASES.md](docs/DATABASES.md)** for how to connect to PostgreSQL/
 ## Roadmap
 
 1. ✅ Run KoboToolbox locally on macOS via Docker (this document).
-2. ⏳ Front the stack with nginx on a custom domain/subdomain, proxying to the local Compose stack.
-3. ⏳ Deploy to the production Ubuntu server, pointed at a real domain.
+2. ✅ Front the stack with nginx on a custom domain/subdomain, proxying to the local Compose stack.
+3. ✅ Deploy to the production Ubuntu server, pointed at a real domain (`loyalminds.org`), secured with a real Let's Encrypt certificate, auto-deployed on push to `main`.
+
+For full production architecture, HTTPS/Let's Encrypt internals, CI/CD, and the secrets inventory, see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
