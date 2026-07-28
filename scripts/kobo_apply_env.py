@@ -134,10 +134,18 @@ def apply_mapping(run_conf, env):
         set_key("exposed_nginx_docker_port", nginx_port)
         set_key("nginx_proxy_port", nginx_port)
 
-    interface_ip = env.get("KOBO_LOCAL_INTERFACE_IP")
-    if interface_ip:
-        set_key("local_interface_ip", interface_ip)
-        set_key("primary_backend_ip", interface_ip)
+    # These two conf keys only ever end up as `extra_hosts` targets inside
+    # kobo-docker's containers (see docker-compose.frontend.override.yml.tpl)
+    # - never used for actually binding/listening, and never seen by the
+    # browser. Docker Compose's special "host-gateway" value tells Docker to
+    # resolve the host machine dynamically at container start, so this never
+    # needs to know the Mac's actual (DHCP-assigned, frequently-changing) LAN
+    # IP - that IP address chasing was a real, repeatedly-hit bug before this.
+    # Requires Compose 1.28+ (this project needs 2.20+ regardless, see
+    # README's Prerequisites), works cross-platform (Mac/Linux/Windows).
+    if install_type == "workstation":
+        set_key("local_interface_ip", "host-gateway")
+        set_key("primary_backend_ip", "host-gateway")
 
     kobodocker_path = env.get("KOBO_KOBODOCKER_PATH")
     if kobodocker_path:

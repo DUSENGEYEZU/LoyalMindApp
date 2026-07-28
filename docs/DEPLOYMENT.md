@@ -87,22 +87,17 @@ This clones `kobo-install` on first run, applies `.env`, starts all containers, 
 
 `./scripts/kobo-stop.sh` stops everything — data is untouched (PostgreSQL/MongoDB/Redis all use bind mounts under `kobo-docker/.vols/`, not ephemeral Docker volumes).
 
-### `/etc/hosts` and `KOBO_LOCAL_INTERFACE_IP` (macOS/workstation-specific)
+### `/etc/hosts` (macOS/workstation-specific)
 
-For `KOBO_INSTALL_TYPE=workstation`, kobo-docker's containers need to reach the host machine by a real LAN IP (not `localhost`), and your browser needs `kf.kobo.local` etc. to resolve. Two things must stay in sync with your machine's **current** LAN IP:
+For `KOBO_INSTALL_TYPE=workstation`, your browser needs `kf.kobo.local`/`kc.kobo.local`/`ee.kobo.local` to resolve somewhere. Point them at the loopback address - it's on the same machine as the containers' published port 80, so this works regardless of network:
 
-1. `.env`: `KOBO_LOCAL_INTERFACE_IP=<your current LAN IP>`
-2. `/etc/hosts`: `<your current LAN IP>  kf.kobo.local kc.kobo.local ee.kobo.local`
-
-**Known recurring gotcha:** DHCP-assigned LAN IPs drift (different Wi-Fi network, router lease renewal, etc.). If the app suddenly stops responding locally with no other changes, this is the first thing to check:
-
-```bash
-ipconfig getifaddr en0    # or check `ifconfig` for whichever interface is actually active
-grep KOBO_LOCAL_INTERFACE_IP .env
-grep kobo.local /etc/hosts
+```
+127.0.0.1  kf.kobo.local kc.kobo.local ee.kobo.local
 ```
 
-If they've diverged, update both, then re-run `./scripts/kobo-start.sh` (or `docker compose up -d` after re-running `kobo_apply_env.py`) to recreate containers with the new IP.
+This is permanently stable - no LAN IP involved, so nothing to keep in sync when you change networks.
+
+**Historical note:** earlier versions of this setup used the Mac's actual LAN IP for both `/etc/hosts` and a `KOBO_LOCAL_INTERFACE_IP` env var (needed so kobo-docker's containers could reach the host via `extra_hosts`). That LAN IP drifted every time the Mac changed networks (different Wi-Fi, VPN, router lease renewal), repeatedly breaking local dev with no other changes. Fixed for good in `kobo_apply_env.py`'s `apply_mapping()`: for `KOBO_INSTALL_TYPE=workstation`, `local_interface_ip`/`primary_backend_ip` are now hardcoded to Docker Compose's special `host-gateway` value, which Docker resolves to the host machine dynamically at container start - no IP to track, ever. `KOBO_LOCAL_INTERFACE_IP` no longer exists as a `.env` variable.
 
 ### Apple Silicon note
 
@@ -210,7 +205,7 @@ None of these are in this document or in the repo. Get actual values from the pr
 
 | Symptom | Likely cause / fix |
 |---|---|
-| Local app stops responding, nothing else changed | LAN IP drift — see [§3](#etchosts-and-kobo_local_interface_ip-macosworkstation-specific) |
+| Local app stops responding, nothing else changed | Was LAN IP drift historically — structurally fixed now (see [§3](#etchosts-macosworkstation-specific)). If it still happens, check `docker compose ps` for a crashed container instead |
 | `docker exec ... cat /var/log/nginx/error.log` hangs forever | That log is symlinked to `/dev/stderr` per standard Docker nginx images — it's a live stream, `cat` blocks. Use `docker logs <container>` or check `nginx -t` / the rendered `app.conf` instead |
 | VPN connects but the server's public DNS lookups fail from your own machine afterward | The RHA VPN pushes internal-only DNS servers (search domain `idc.bsc.rw`) that can't resolve public domains — this is a *client-side* testing artifact only, not a server problem. Check `networksetup -getdnsservers "<active interface>"` and clear it (`networksetup -setdnsservers "<interface>" Empty`) if it's stuck after disconnecting |
 | `certbot did not issue a certificate` | DNS for the domain(s) doesn't point at the server yet, or ports 80/443 aren't reachable from the public internet. Verify both, then just re-run — `nginx_ssl_proxy` is left running so it's safe to retry |
