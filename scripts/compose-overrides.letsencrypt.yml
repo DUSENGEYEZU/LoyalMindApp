@@ -76,6 +76,10 @@ services:
       - ../nginx-ssl-proxy/conf:/etc/nginx/conf.d
       - ../nginx-ssl-proxy/data/certbot/conf:/etc/letsencrypt
       - ../nginx-ssl-proxy/data/certbot/www:/var/www/certbot
+      # Static training/user-guide site, served at https://loyalminds.org/docs/
+      # - see the `location /docs/` block in scripts/letsencrypt-templates/
+      # final.conf.tpl. Read-only: nginx only ever reads these files.
+      - ../docs-site:/usr/share/nginx/docs:ro
     ports:
       - "80:80"
       - "443:443"

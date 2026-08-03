@@ -59,6 +59,17 @@ server {
     # KoboToolbox form/media uploads can be large.
     client_max_body_size 100M;
 
+    # Static training/user-guide site (docs-site/ in the repo, mounted
+    # read-only in scripts/compose-overrides.letsencrypt.yml) - served
+    # directly by this proxy, never reaches kobo-docker's own nginx/kpi.
+    location = /docs {
+        return 301 /docs/;
+    }
+    location /docs/ {
+        alias /usr/share/nginx/docs/;
+        index index.html;
+    }
+
     location / {
         proxy_pass http://nginx:80;
         proxy_set_header Host              $kobo_upstream_host;

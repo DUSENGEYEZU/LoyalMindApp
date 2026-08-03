@@ -1,0 +1,662 @@
+<title>LoyalMinds Field Guide — Data Collection Workflow</title>
+<meta name="description" content="Step-by-step field guide: account setup through form submission and reporting in LoyalMinds.">
+<style>
+  @media (prefers-color-scheme: dark) { :root { color-scheme: dark; } }
+
+  :root {
+    --bg: #F5F7FA;
+    --surface: #FFFFFF;
+    --surface-2: #EEF2F6;
+    --ink: #1C2530;
+    --ink-soft: #4B5A68;
+    --ink-faint: #7A8896;
+    --accent: #1F5C8B;
+    --accent-ink: #0F3A5B;
+    --accent-soft: #E8F1F8;
+    --line: #D9E1E8;
+    --line-strong: #B9C6D1;
+    --shadow: 0 1px 2px rgba(20, 34, 48, 0.06), 0 8px 24px rgba(20, 34, 48, 0.06);
+    --radius: 10px;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12181F;
+      --surface: #1A222B;
+      --surface-2: #212B36;
+      --ink: #E7ECF1;
+      --ink-soft: #A7B4C1;
+      --ink-faint: #7C8896;
+      --accent: #6FB1E0;
+      --accent-ink: #BFE0F5;
+      --accent-soft: #1E3346;
+      --line: #2A3542;
+      --line-strong: #3A4856;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12181F; --surface: #1A222B; --surface-2: #212B36; --ink: #E7ECF1; --ink-soft: #A7B4C1;
+    --ink-faint: #7C8896; --accent: #6FB1E0; --accent-ink: #BFE0F5; --accent-soft: #1E3346;
+    --line: #2A3542; --line-strong: #3A4856; --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F7FA; --surface: #FFFFFF; --surface-2: #EEF2F6; --ink: #1C2530; --ink-soft: #4B5A68;
+    --ink-faint: #7A8896; --accent: #1F5C8B; --accent-ink: #0F3A5B; --accent-soft: #E8F1F8;
+    --line: #D9E1E8; --line-strong: #B9C6D1; --shadow: 0 1px 2px rgba(20,34,48,0.06), 0 8px 24px rgba(20,34,48,0.06);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 48px;
+  }
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail { display: none; }
+  }
+
+  /* ---------- Cover ---------- */
+  .cover {
+    grid-column: 1 / -1;
+    padding: 72px 0 40px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 8px;
+  }
+  .cover__eyebrow {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .cover__eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 22px;
+    height: 1px;
+    background: var(--accent);
+  }
+  .cover h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(34px, 5vw, 52px);
+    line-height: 1.08;
+    margin: 18px 0 14px;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .cover__sub {
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 28px;
+  }
+  .cover__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .meta-pill {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 14px;
+  }
+
+  /* ---------- Rail (nav) ---------- */
+  .rail {
+    position: sticky;
+    top: 32px;
+    align-self: start;
+    padding-top: 8px;
+  }
+  .rail__label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 14px;
+  }
+  .rail ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-left: 1px solid var(--line);
+  }
+  .rail li { margin: 0; }
+  .rail a {
+    display: block;
+    text-decoration: none;
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    padding: 7px 0 7px 16px;
+    border-left: 2px solid transparent;
+    margin-left: -1px;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .rail a:hover { color: var(--accent); border-left-color: var(--accent); }
+  .rail .num {
+    font-family: var(--mono);
+    color: var(--ink-faint);
+    margin-right: 8px;
+  }
+
+  /* ---------- Main column ---------- */
+  main { min-width: 0; padding-top: 48px; }
+
+  .checklist {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px 28px;
+    margin: 0 0 56px;
+    box-shadow: var(--shadow);
+  }
+  .checklist h2 {
+    font-family: var(--serif);
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+  .checklist p { color: var(--ink-soft); margin: 0 0 16px; font-size: 14.5px; }
+  .checklist ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 8px 24px;
+  }
+  @media (max-width: 620px) { .checklist ul { grid-template-columns: 1fr; } }
+  .checklist li {
+    font-size: 14.5px;
+    display: flex;
+    gap: 10px;
+    color: var(--ink);
+  }
+  .checklist li::before {
+    content: "";
+    flex: none;
+    width: 15px; height: 15px;
+    margin-top: 3px;
+    border-radius: 4px;
+    border: 1.5px solid var(--line-strong);
+  }
+
+  section.step {
+    padding: 8px 0 64px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 8px;
+    scroll-margin-top: 24px;
+  }
+  section.step:last-of-type { border-bottom: none; }
+
+  .step__head {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    margin-bottom: 14px;
+  }
+  .step__num {
+    font-family: var(--mono);
+    font-size: 15px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 6px;
+    padding: 3px 10px;
+    flex: none;
+  }
+  .step h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 27px;
+    margin: 0;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .step__intro {
+    color: var(--ink-soft);
+    max-width: 74ch;
+    font-size: 15.5px;
+    margin: 0 0 24px;
+  }
+  .step__intro strong { color: var(--ink); font-weight: 600; }
+
+  .step ol.instructions, .step ul.instructions {
+    margin: 0 0 28px;
+    padding-left: 0;
+    list-style: none;
+    counter-reset: instr;
+    max-width: 74ch;
+  }
+  .step ol.instructions > li {
+    counter-increment: instr;
+    position: relative;
+    padding-left: 30px;
+    margin-bottom: 10px;
+    font-size: 15px;
+  }
+  .step ol.instructions > li::before {
+    content: counter(instr);
+    position: absolute;
+    left: 0; top: 1px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--accent);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    width: 20px; height: 20px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step ul.instructions > li {
+    position: relative;
+    padding-left: 22px;
+    margin-bottom: 10px;
+    font-size: 15px;
+  }
+  .step ul.instructions > li::before {
+    content: "–";
+    position: absolute; left: 0; color: var(--ink-faint);
+  }
+  code.field, kbd.field {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: var(--accent-ink);
+  }
+
+  .callout {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 14px;
+    color: var(--ink);
+    max-width: 74ch;
+    margin: 0 0 28px;
+  }
+  .callout strong { color: var(--accent-ink); }
+
+  .shots {
+    display: grid;
+    gap: 28px;
+  }
+  .shots.cols-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  @media (max-width: 760px) { .shots.cols-2 { grid-template-columns: 1fr; } }
+
+  figure.shot {
+    margin: 0;
+  }
+  .shot__frame {
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    background: var(--surface);
+  }
+  .shot__frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  figure.shot figcaption {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    display: flex;
+    gap: 8px;
+  }
+  figure.shot figcaption .fig-num { color: var(--accent); flex: none; }
+
+  .divider-note {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 40px 0 24px;
+  }
+  .divider-note::before, .divider-note::after {
+    content: "";
+    height: 1px;
+    background: var(--line);
+    flex: 1;
+  }
+
+  footer.colophon {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line);
+    padding-top: 28px;
+    margin-top: 24px;
+    color: var(--ink-faint);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  @media print {
+    .rail { display: none; }
+    .shell { grid-template-columns: 1fr; }
+    section.step { break-inside: avoid; }
+  }
+</style>
+
+<div class="shell">
+
+  <div class="cover">
+    <div class="cover__eyebrow">LoyalMinds · Field Guide</div>
+    <h1>From account to insight: the complete data&#8209;collection workflow</h1>
+    <p class="cover__sub">A step-by-step walkthrough for enumerators and project owners &mdash; from creating an account to submitting a questionnaire and reading the results, using the EAC User Satisfaction Survey as a live example.</p>
+    <div class="cover__meta">
+      <span class="meta-pill">loyalminds.org</span>
+      <span class="meta-pill">12 sections</span>
+      <span class="meta-pill">Prepared for training</span>
+    </div>
+  </div>
+
+  <nav class="rail" aria-label="Section navigation">
+    <p class="rail__label">Contents</p>
+    <ol>
+      <li><a href="#s1"><span class="num">01</span>Create an account</a></li>
+      <li><a href="#s2"><span class="num">02</span>Verify your email</a></li>
+      <li><a href="#s3"><span class="num">03</span>Log in</a></li>
+      <li><a href="#s4"><span class="num">04</span>Forgot password</a></li>
+      <li><a href="#s5"><span class="num">05</span>Create a new project</a></li>
+      <li><a href="#s6"><span class="num">06</span>Deploy the project</a></li>
+      <li><a href="#s7"><span class="num">07</span>Fill in the form</a></li>
+      <li><a href="#s8"><span class="num">08</span>Save as draft (offline)</a></li>
+      <li><a href="#s9"><span class="num">09</span>Submit data</a></li>
+      <li><a href="#s10"><span class="num">10</span>View the report</a></li>
+      <li><a href="#s11"><span class="num">11</span>Download the data</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <div class="checklist">
+      <h2>Before the session</h2>
+      <p>Have these ready and each participant will move through every step without waiting on anyone else.</p>
+      <ul>
+        <li>A personal email address you can access during training</li>
+        <li>The project's questionnaire, saved as an .xlsx file</li>
+        <li>A laptop or tablet with a browser (Chrome or Safari recommended)</li>
+        <li>Access to <a href="https://loyalminds.org/accounts/login/">loyalminds.org</a></li>
+      </ul>
+    </div>
+
+    <section class="step" id="s1">
+      <div class="step__head"><span class="step__num">01</span><h2>Create an account</h2></div>
+      <p class="step__intro">Every enumerator and project owner needs their own account &mdash; never share a login. Go to <strong>loyalminds.org/accounts/signup</strong> and complete the registration form.</p>
+      <ol class="instructions">
+        <li>Enter your <code class="field">Full name</code>, choose a <code class="field">Username</code>, and enter a real <code class="field">Email</code> &mdash; you'll need it in the next step.</li>
+        <li>Select your <code class="field">Country</code>, <code class="field">Organization type</code>, and <code class="field">Organization name</code>.</li>
+        <li>Choose a <code class="field">Password</code> and repeat it, then select <strong>Create Account</strong>.</li>
+      </ol>
+      <div class="shots cols-2">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/01-signup-empty.jpg" alt="01-signup-empty.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 1</span>The registration form</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/02-signup-filled.jpg" alt="02-signup-filled.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 2</span>Filled in and ready to submit</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="step" id="s2">
+      <div class="step__head"><span class="step__num">02</span><h2>Verify your email</h2></div>
+      <p class="step__intro">LoyalMinds sends an activation link the moment you register. The account stays inactive until you click it &mdash; this confirms the email address is really yours.</p>
+      <div class="shots cols-2">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/03-confirm-email.jpg" alt="03-confirm-email.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 3</span>Confirmation screen shown right after registering</figcaption>
+        </figure>
+      </div>
+      <div class="callout"><strong>Can't find the email?</strong> Check the spam or junk folder first. The link is valid for a limited time &mdash; if it has expired, request a new one from the login page.</div>
+    </section>
+
+    <section class="step" id="s3">
+      <div class="step__head"><span class="step__num">03</span><h2>Log in</h2></div>
+      <p class="step__intro">Once your account is active, sign in with your username and password at <strong>loyalminds.org/accounts/login</strong>.</p>
+      <div class="shots cols-2">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/04-login-empty.jpg" alt="04-login-empty.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 4</span>The login screen</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/05-login-filled.jpg" alt="05-login-filled.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 5</span>Credentials entered</figcaption>
+        </figure>
+      </div>
+      <div class="shots">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/06-dashboard.jpg" alt="06-dashboard.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 6</span>Your project dashboard after logging in</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="step" id="s4">
+      <div class="step__head"><span class="step__num">04</span><h2>Forgot your password?</h2></div>
+      <p class="step__intro">From the login screen, select <strong>Forgot password?</strong> Enter the email address on your account and a reset link will be sent.</p>
+      <div class="shots cols-2">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/07-forgot-password-empty.jpg" alt="07-forgot-password-empty.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 7</span>Password reset request</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/09-forgot-password-sent.jpg" alt="09-forgot-password-sent.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 8</span>Confirmation that a reset link was sent</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <div class="divider-note">Building the project</div>
+
+    <section class="step" id="s5">
+      <div class="step__head"><span class="step__num">05</span><h2>Create a new project</h2></div>
+      <p class="step__intro">A project can start from a blank form, a template, or an existing <strong>XLSForm</strong> spreadsheet. This guide uses the third option &mdash; the fastest way to bring a questionnaire designed in Excel onto LoyalMinds.</p>
+      <ol class="instructions">
+        <li>From the dashboard, select the blue <code class="field">NEW</code> button.</li>
+        <li>Choose <strong>Upload an XLSForm</strong> from the source menu.</li>
+        <li>Select the file, or drag and drop it into the upload area.</li>
+        <li>Review the project name and details LoyalMinds detected from the file, then select <strong>Create project</strong>.</li>
+      </ol>
+      <div class="shots cols-2">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/10-new-project-menu.jpg" alt="10-new-project-menu.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 9</span>Choosing a source for the new project</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/11-upload-xlsform-dialog.jpg" alt="11-upload-xlsform-dialog.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 10</span>Uploading the XLSForm file</figcaption>
+        </figure>
+      </div>
+      <div class="shots cols-2" style="margin-top: 28px;">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/12-project-details.jpg" alt="12-project-details.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 11</span>Project details, read from the spreadsheet</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/13-project-created.jpg" alt="13-project-created.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 12</span>The project is created, still in draft</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="step" id="s6">
+      <div class="step__head"><span class="step__num">06</span><h2>Deploy the project</h2></div>
+      <p class="step__intro">A project must be <strong>deployed</strong> before it can collect real data &mdash; deploying publishes the current version of the form and generates the link enumerators will use in the field.</p>
+      <ol class="instructions">
+        <li>Open the project and select <strong>deploy</strong> from the summary panel.</li>
+        <li>Confirm &mdash; the status changes from <em>Draft</em> to <em>Deployed</em>, and a <strong>Collect data</strong> panel appears with the form's web link.</li>
+      </ol>
+      <div class="shots">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/14-deployed.jpg" alt="14-deployed.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 13</span>Deployed &mdash; ready to collect data, with the web-form link visible</figcaption>
+        </figure>
+      </div>
+      <div class="callout"><strong>Every change needs a redeploy.</strong> Editing the form after this point only updates the draft &mdash; select <strong>redeploy</strong> to publish your changes to the live form.</div>
+    </section>
+
+    <div class="divider-note">Collecting data</div>
+
+    <section class="step" id="s7">
+      <div class="step__head"><span class="step__num">07</span><h2>Fill in the form</h2></div>
+      <p class="step__intro">Selecting <strong>Open</strong> next to the web-form link launches the questionnaire exactly as a respondent or enumerator will see it &mdash; consent statement first, then each section in order.</p>
+      <div class="shots cols-2">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/15-webform-start.jpg" alt="15-webform-start.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 14</span>The form opens with its informed-consent statement</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/16-webform-consent.jpg" alt="16-webform-consent.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 15</span>Recording consent before continuing</figcaption>
+        </figure>
+      </div>
+      <div class="shots cols-2" style="margin-top: 28px;">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/17-webform-filling.jpg" alt="17-webform-filling.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 16</span>Single and multiple-choice questions</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/18-webform-filling2.jpg" alt="18-webform-filling2.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 17</span>A ranking / matrix-style question</figcaption>
+        </figure>
+      </div>
+      <div class="callout">Required questions are marked with <strong>*</strong>. A question left blank when required will be highlighted in red when you try to move on.</div>
+    </section>
+
+    <section class="step" id="s8">
+      <div class="step__head"><span class="step__num">08</span><h2>Save as draft &mdash; working offline</h2></div>
+      <p class="step__intro">LoyalMinds forms are built to work with no connection at all. Answers are written to the device's own storage as you go, so an interview is never lost to a dead battery or a dropped signal.</p>
+      <ol class="instructions">
+        <li>Select <strong>Save Draft</strong> at any point to pause an interview and continue later &mdash; give the draft a name you'll recognize.</li>
+        <li>The record is now held in the browser's local queue, shown by the counter in the top-left corner.</li>
+        <li>Reopen the queue at any time to resume, export, or force an upload.</li>
+      </ol>
+      <div class="shots cols-2">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/19-webform-footer-savedraft.jpg" alt="19-webform-footer-savedraft.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 18</span>Save Draft and Submit, side by side</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/20-save-draft-dialog.jpg" alt="20-save-draft-dialog.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 19</span>Naming the draft before saving</figcaption>
+        </figure>
+      </div>
+      <div class="shots cols-2" style="margin-top: 28px;">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/21-record-queued-badge.jpg" alt="21-record-queued-badge.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 20</span>The queue counter confirms one record is stored</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/22-queue-drawer.jpg" alt="22-queue-drawer.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 21</span>Opening the queue: records stay on the device until uploaded</figcaption>
+        </figure>
+      </div>
+      <div class="callout"><strong>How offline mode really works:</strong> completed (non-draft) records upload automatically every five minutes once the page is open and a connection returns. Drafts wait for you to reopen and finish them on purpose &mdash; select <strong>Upload</strong> in the queue to force a submission attempt immediately.</div>
+    </section>
+
+    <section class="step" id="s9">
+      <div class="step__head"><span class="step__num">09</span><h2>Submit the completed form</h2></div>
+      <p class="step__intro">Once every required question is answered, select <strong>Submit</strong>. LoyalMinds validates the responses, and &mdash; if a connection is available &mdash; sends the record straight to the project.</p>
+      <div class="shots">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/24-submit-result.jpg" alt="24-submit-result.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 22</span>Submission accepted</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <div class="divider-note">After collection</div>
+
+    <section class="step" id="s10">
+      <div class="step__head"><span class="step__num">10</span><h2>View submitted data and reports</h2></div>
+      <p class="step__intro">Back in the project, open the <strong>Data</strong> tab to see every submission as it arrives.</p>
+      <ol class="instructions">
+        <li><strong>Table</strong> lists every submission as a row, with each question as a column.</li>
+        <li><strong>Reports</strong> turns the same data into automatic charts and frequency tables &mdash; one per question &mdash; updated as new submissions come in.</li>
+      </ol>
+      <div class="shots">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/25-data-table.jpg" alt="25-data-table.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 23</span>Table view &mdash; the first submitted response</figcaption>
+        </figure>
+      </div>
+      <div class="shots" style="margin-top: 28px;">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/26-reports.jpg" alt="26-reports.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 24</span>Reports view &mdash; an automatic chart for one question</figcaption>
+        </figure>
+      </div>
+      <div class="callout">The banner on every automated report is a genuine reminder, not boilerplate: <strong>treat these charts as a first look</strong>, and clean the data before using figures in an official publication.</div>
+    </section>
+
+    <section class="step" id="s11">
+      <div class="step__head"><span class="step__num">11</span><h2>Download the data to your computer</h2></div>
+      <p class="step__intro">From <strong>Data &rarr; Downloads</strong>, export the full dataset as a file you can open in Excel, SPSS, or Stata.</p>
+      <ol class="instructions">
+        <li>Choose an <code class="field">export type</code> &mdash; <strong>XLS</strong> is the most portable choice for most teams.</li>
+        <li>Choose the <code class="field">Value and header format</code> &mdash; typically the language your team reads.</li>
+        <li>Select <strong>Export</strong>. LoyalMinds prepares the file and lists it under <strong>Exports</strong> below.</li>
+        <li>Select <strong>Download</strong> next to the finished export, and save it to your computer like any other file.</li>
+      </ol>
+      <div class="shots cols-2">
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/27-downloads-page.jpg" alt="27-downloads-page.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 25</span>Setting up an export</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot__frame"><img src="images/28-export-generated.jpg" alt="28-export-generated.jpg" loading="lazy" width="1100"></div>
+          <figcaption><span class="fig-num">Fig. 26</span>Export ready &mdash; select Download to save it locally</figcaption>
+        </figure>
+      </div>
+      <div class="callout"><strong>Exports don't update on their own.</strong> If new submissions arrive after you generate one, run <strong>Export</strong> again to include them &mdash; each export is a snapshot at the moment you created it.</div>
+    </section>
+
+  </main>
+
+  <footer class="colophon">
+    <span>LoyalMinds Field Guide &middot; loyalminds.org</span>
+    <span>Prepared from a live walkthrough of the EAC User Satisfaction Survey</span>
+  </footer>
+
+</div>
