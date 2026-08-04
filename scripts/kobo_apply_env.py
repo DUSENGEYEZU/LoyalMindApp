@@ -28,6 +28,10 @@ Idempotent: re-running with unchanged .env values is a fast no-op write
 
 Run via ./scripts/kobo-start.sh - not usually invoked directly.
 """
+import utils.clients
+import utils.http_session
+import utils.transport
+import utils.session
 import os
 import re
 import shutil
