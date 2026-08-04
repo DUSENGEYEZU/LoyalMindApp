@@ -68,6 +68,7 @@ server {
     location /docs/ {
         alias /usr/share/nginx/docs/;
         index index.html;
+        charset utf-8;
     }
 
     location / {
