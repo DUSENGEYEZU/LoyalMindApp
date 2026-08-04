@@ -450,6 +450,7 @@
       <li><a href="#s9"><span class="num">09</span><span data-i18n="nav-9">Submit data</span></a></li>
       <li><a href="#s10"><span class="num">10</span><span data-i18n="nav-10">View the report</span></a></li>
       <li><a href="#s11"><span class="num">11</span><span data-i18n="nav-11">Download the data</span></a></li>
+      <li><a href="#s12"><span class="num">12</span><span data-i18n="nav-12">Work with no internet</span></a></li>
     </ol>
   </nav>
 
@@ -699,6 +700,21 @@
       <div class="callout" data-i18n="callout-11"><strong>Exports don't update on their own.</strong> If new submissions arrive after you generate one, run <strong>Export</strong> again to include them &mdash; each export is a snapshot at the moment you created it.</div>
     </section>
 
+    <div class="divider-note" data-i18n="div-4">Working without internet</div>
+
+    <section class="step" id="s12">
+      <div class="step__head"><span class="step__num">12</span><h2 data-i18n="h-12">For enumerators with no internet: KoboCollect</h2></div>
+      <p class="step__intro" data-i18n="intro-12">The web form's <strong>Save Draft</strong> queue (Step 8) is for short gaps in connectivity &mdash; it still needs a browser and can be lost if the device's storage is cleared. For staff who go days or weeks with no signal at all, use <strong>KoboCollect</strong> instead: an Android app that downloads the form once, then works completely offline until you choose to send.</p>
+      <ol class="instructions">
+        <li data-i18n="s12-li1">Install <strong>KoboCollect</strong> from the Google Play Store (Android only &mdash; there is no iOS version).</li>
+        <li data-i18n="s12-li2">Open <strong>Settings &rarr; Server</strong> and enter the server URL <code class="field">https://kc.loyalminds.org</code>, then sign in with the same username and password used on loyalminds.org.</li>
+        <li data-i18n="s12-li3">While still connected, tap <strong>Get Blank Form</strong>, select the deployed project, and download it &mdash; this only needs to happen once per phone, and again after any redeploy.</li>
+        <li data-i18n="s12-li4">From then on, tap <strong>Fill Blank Form</strong> to start a new interview any time, with or without a connection.</li>
+        <li data-i18n="s12-li5">Finished interviews wait under <strong>Send Finalized Form</strong>. Once back in range of a connection, open it, select the completed interviews, and tap <strong>Send</strong> &mdash; they arrive in the project's Data tab exactly like a web submission.</li>
+      </ol>
+      <div class="callout" data-i18n="callout-12"><strong>Nothing is lost while offline.</strong> Interviews stay safely on the device, unsent, for as long as needed. The only risk is the phone itself being lost or damaged before syncing &mdash; encourage enumerators to send finalized forms as soon as they get any signal, rather than letting weeks of interviews pile up on one device.</div>
+    </section>
+
   </main>
 
   <footer class="colophon">
@@ -721,7 +737,7 @@
       "nav-1": "Create an account", "nav-2": "Verify your email", "nav-3": "Log in",
       "nav-4": "Forgot password", "nav-5": "Create a new project", "nav-6": "Deploy the project",
       "nav-7": "Fill in the form", "nav-8": "Save as draft (offline)", "nav-9": "Submit data",
-      "nav-10": "View the report", "nav-11": "Download the data",
+      "nav-10": "View the report", "nav-11": "Download the data", "nav-12": "Work with no internet",
       "checklist-h": "Before the session",
       "checklist-p": "Have these ready and each participant will move through every step without waiting on anyone else.",
       "checklist-1": "A personal email address you can access during training",
@@ -793,6 +809,15 @@
       "s11-li4": "Select <strong>Download</strong> next to the finished export, and save it to your computer like any other file.",
       "fig-25": "Setting up an export", "fig-26": "Export ready &mdash; select Download to save it locally",
       "callout-11": "<strong>Exports don't update on their own.</strong> If new submissions arrive after you generate one, run <strong>Export</strong> again to include them &mdash; each export is a snapshot at the moment you created it.",
+      "div-4": "Working without internet",
+      "h-12": "For enumerators with no internet: KoboCollect",
+      "intro-12": "The web form's <strong>Save Draft</strong> queue (Step 8) is for short gaps in connectivity &mdash; it still needs a browser and can be lost if the device's storage is cleared. For staff who go days or weeks with no signal at all, use <strong>KoboCollect</strong> instead: an Android app that downloads the form once, then works completely offline until you choose to send.",
+      "s12-li1": "Install <strong>KoboCollect</strong> from the Google Play Store (Android only &mdash; there is no iOS version).",
+      "s12-li2": "Open <strong>Settings &rarr; Server</strong> and enter the server URL <code class=\"field\">https://kc.loyalminds.org</code>, then sign in with the same username and password used on loyalminds.org.",
+      "s12-li3": "While still connected, tap <strong>Get Blank Form</strong>, select the deployed project, and download it &mdash; this only needs to happen once per phone, and again after any redeploy.",
+      "s12-li4": "From then on, tap <strong>Fill Blank Form</strong> to start a new interview any time, with or without a connection.",
+      "s12-li5": "Finished interviews wait under <strong>Send Finalized Form</strong>. Once back in range of a connection, open it, select the completed interviews, and tap <strong>Send</strong> &mdash; they arrive in the project's Data tab exactly like a web submission.",
+      "callout-12": "<strong>Nothing is lost while offline.</strong> Interviews stay safely on the device, unsent, for as long as needed. The only risk is the phone itself being lost or damaged before syncing &mdash; encourage enumerators to send finalized forms as soon as they get any signal, rather than letting weeks of interviews pile up on one device.",
       "footer-1": "LoyalMinds Field Guide &middot; loyalminds.org",
       "footer-2": "Prepared from a live walkthrough of the EAC User Satisfaction Survey"
     },
@@ -806,7 +831,7 @@
       "nav-1": "Créer un compte", "nav-2": "Vérifier votre e-mail", "nav-3": "Se connecter",
       "nav-4": "Mot de passe oublié", "nav-5": "Créer un nouveau projet", "nav-6": "Déployer le projet",
       "nav-7": "Remplir le formulaire", "nav-8": "Enregistrer en brouillon (hors ligne)", "nav-9": "Soumettre les données",
-      "nav-10": "Consulter le rapport", "nav-11": "Télécharger les données",
+      "nav-10": "Consulter le rapport", "nav-11": "Télécharger les données", "nav-12": "Travailler sans internet",
       "checklist-h": "Avant la séance",
       "checklist-p": "Préparez ces éléments à l'avance et chaque participant pourra suivre toutes les étapes sans attendre personne.",
       "checklist-1": "Une adresse e-mail personnelle accessible pendant la formation",
@@ -879,6 +904,15 @@
       "s11-li4": "Sélectionnez <strong>Download</strong> (Télécharger) à côté de l'export terminé, et enregistrez-le sur votre ordinateur comme n'importe quel autre fichier.",
       "fig-25": "Configuration d'un export", "fig-26": "Export prêt &mdash; sélectionnez Download pour l'enregistrer localement",
       "callout-11": "<strong>Les exports ne se mettent pas à jour automatiquement.</strong> Si de nouvelles soumissions arrivent après la génération d'un export, relancez <strong>Export</strong> pour les inclure &mdash; chaque export est une photographie prise au moment de sa création.",
+      "div-4": "Travailler sans internet",
+      "h-12": "Pour les enquêteurs sans internet : KoboCollect",
+      "intro-12": "La file d'attente <strong>Save Draft</strong> du formulaire web (étape 8) convient aux courtes coupures de connexion &mdash; elle nécessite tout de même un navigateur et peut être perdue si le stockage de l'appareil est effacé. Pour le personnel qui reste des jours, voire des semaines, sans aucun signal, utilisez plutôt <strong>KoboCollect</strong> : une application Android qui télécharge le formulaire une seule fois, puis fonctionne entièrement hors ligne jusqu'à l'envoi.",
+      "s12-li1": "Installez <strong>KoboCollect</strong> depuis le Google Play Store (Android uniquement &mdash; il n'existe pas de version iOS).",
+      "s12-li2": "Ouvrez <strong>Settings &rarr; Server</strong> (Paramètres → Serveur) et saisissez l'adresse <code class=\"field\">https://kc.loyalminds.org</code>, puis connectez-vous avec le même nom d'utilisateur et le même mot de passe que sur loyalminds.org.",
+      "s12-li3": "Pendant que vous êtes encore connecté, appuyez sur <strong>Get Blank Form</strong> (Récupérer un formulaire vierge), sélectionnez le projet déployé, puis téléchargez-le &mdash; cela ne se fait qu'une seule fois par téléphone, et de nouveau après chaque redéploiement.",
+      "s12-li4": "Ensuite, appuyez sur <strong>Fill Blank Form</strong> (Remplir un formulaire vierge) pour démarrer un nouvel entretien à tout moment, avec ou sans connexion.",
+      "s12-li5": "Les entretiens terminés attendent sous <strong>Send Finalized Form</strong> (Envoyer les formulaires finalisés). De retour à portée d'une connexion, ouvrez cet écran, sélectionnez les entretiens terminés, puis appuyez sur <strong>Send</strong> (Envoyer) &mdash; ils apparaissent dans l'onglet Data du projet, exactement comme une soumission web.",
+      "callout-12": "<strong>Rien n'est perdu hors ligne.</strong> Les entretiens restent en sécurité sur l'appareil, non envoyés, aussi longtemps que nécessaire. Le seul risque est que le téléphone soit perdu ou endommagé avant la synchronisation &mdash; encouragez les enquêteurs à envoyer les formulaires finalisés dès qu'ils captent un signal, plutôt que de laisser s'accumuler des semaines d'entretiens sur un seul appareil.",
       "footer-1": "LoyalMinds Guide de terrain &middot; loyalminds.org",
       "footer-2": "Préparé à partir d'une démonstration réelle de l'enquête de satisfaction des usagers de la CAE"
     }
